@@ -8,10 +8,10 @@ export default defineConfig({
   plugins: [
     react(),
     {
-      name: 'controllers-api',
+      name: 'configure-server',
       configureServer(server) {
         server.middlewares.use(express.json());
-        server.middlewares.use('/api', controllersApi);
+        server.middlewares.use('/api/controllers', controllersApi);
       },
     },
   ],
