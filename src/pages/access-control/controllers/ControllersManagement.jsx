@@ -29,12 +29,13 @@ import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { useToast } from '@/components/ui/use-toast';
 import { Toaster } from '@/components/ui/toaster';
 
-import { getControllers, addController, removeController } from '@/config/controllers';
+import { controllersService } from '@/services/controllers';
 import { hikvisionService } from '@/services/hikvision';
 
 const ControllersManagement = () => {
   const { toast } = useToast();
-  const [controllers, setControllers] = useState(() => getControllers());
+  const [controllers, setControllers] = useState([]);
+  const [loading, setLoading] = useState(true);
   const [showAddDialog, setShowAddDialog] = useState(false);
   const [formData, setFormData] = useState({
     name: '',
@@ -44,6 +45,27 @@ const ControllersManagement = () => {
     password: '',
     location: ''
   });
+
+  // Load controllers on mount
+  useEffect(() => {
+    loadControllers();
+  }, []);
+
+  const loadControllers = async () => {
+    try {
+      setLoading(true);
+      const data = await controllersService.getControllers();
+      setControllers(data);
+    } catch (error) {
+      toast({
+        title: 'Error',
+        description: 'Failed to load controllers',
+        variant: 'destructive'
+      });
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const handleAddController = async (e) => {
     e.preventDefault();
@@ -60,8 +82,8 @@ const ControllersManagement = () => {
         return;
       }
 
-      // Add to configuration
-      const newController = await addController(formData);
+      // Add controller
+      const newController = await controllersService.addController(formData);
       setControllers(prev => [newController, ...prev]);
       setShowAddDialog(false);
       setFormData({
@@ -91,7 +113,7 @@ const ControllersManagement = () => {
 
   const handleDeleteController = async (id) => {
     try {
-      await removeController(id);
+      await controllersService.removeController(id);
       setControllers(prev => prev.filter(c => c.id !== id));
       toast({
         title: 'Success',
@@ -106,94 +128,47 @@ const ControllersManagement = () => {
     }
   };
 
-const checkStatus = async (controller) => {
-  try {
-    await hikvisionService.initializeController(controller);
-    const status = await hikvisionService.getDeviceStatus(controller.id);
-    
-    await updateControllerStatus(controller.id, {
-      status: 'online',
-      cpuUsage: status.cpuUsage,
-      memoryUsage: status.memoryUsage
-    });
+  const checkStatus = async (controller) => {
+    try {
+      await hikvisionService.initializeController(controller);
+      const status = await hikvisionService.getDeviceStatus(controller.id);
+      
+      await controllersService.updateStatus(controller.id, {
+        status: 'online',
+        cpuUsage: status.cpuUsage,
+        memoryUsage: status.memoryUsage
+      });
 
-    // Update local state
-    setControllers(getControllers());
+      // Reload controllers to get updated status
+      loadControllers();
 
-    toast({
-      title: 'Status Updated',
-      description: `${controller.name} is online`,
-    });
-  } catch (error) {
-    await updateControllerStatus(controller.id, {
-      status: 'offline'
-    });
+      toast({
+        title: 'Status Updated',
+        description: `${controller.name} is online`,
+      });
+    } catch (error) {
+      await controllersService.updateStatus(controller.id, {
+        status: 'offline'
+      });
 
-    // Update local state
-    setControllers(getControllers());
+      // Reload controllers to get updated status
+      loadControllers();
 
-    toast({
-      title: 'Status Check Failed',
-      description: `${controller.name} is offline`,
-      variant: 'destructive'
-    });
+      toast({
+        title: 'Status Check Failed',
+        description: `${controller.name} is offline`,
+        variant: 'destructive'
+      });
+    }
+  };
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center min-h-screen">
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-gray-900" />
+      </div>
+    );
   }
-};
-
-  // Add these functions to ControllersManagement.jsx
-
-const handleExportConfig = () => {
-  try {
-    const configData = exportControllers();
-    const blob = new Blob([configData], { type: 'application/json' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `hik-controllers-${new Date().toISOString().split('T')[0]}.json`;
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    URL.revokeObjectURL(url);
-  } catch (error) {
-    toast({
-      title: 'Export Failed',
-      description: 'Failed to export controllers configuration',
-      variant: 'destructive'
-    });
-  }
-};
-
-const handleImportConfig = async (event) => {
-  try {
-    const file = event.target.files[0];
-    if (!file) return;
-
-    const reader = new FileReader();
-    reader.onload = async (e) => {
-      try {
-        await importControllers(e.target.result);
-        setControllers(getControllers());
-        toast({
-          title: 'Import Successful',
-          description: 'Controllers configuration imported successfully'
-        });
-      } catch (error) {
-        toast({
-          title: 'Import Failed',
-          description: 'Invalid configuration file',
-          variant: 'destructive'
-        });
-      }
-    };
-    reader.readAsText(file);
-  } catch (error) {
-    toast({
-      title: 'Import Failed',
-      description: 'Failed to import controllers configuration',
-      variant: 'destructive'
-    });
-  }
-};
 
   return (
     <div className="p-6">
@@ -224,7 +199,7 @@ const handleImportConfig = async (event) => {
         {/* Controllers Grid */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
           {controllers.map((controller) => (
-            <Card key={controller.id}>
+            <Card key={controller.id} className="hover:shadow-lg transition-shadow duration-300">
               <CardHeader className="pb-4">
                 <div className="flex justify-between items-start">
                   <div>
@@ -252,6 +227,7 @@ const handleImportConfig = async (event) => {
                       size="sm"
                       variant="ghost"
                       onClick={() => checkStatus(controller)}
+                      className="hover:bg-gray-100"
                     >
                       <RefreshCcw className="w-4 h-4" />
                     </Button>
@@ -294,6 +270,7 @@ const handleImportConfig = async (event) => {
                       variant="outline"
                       size="sm"
                       onClick={() => {}}
+                      className="hover:bg-gray-50"
                     >
                       <Settings className="w-4 h-4 mr-2" />
                       Settings
@@ -302,6 +279,7 @@ const handleImportConfig = async (event) => {
                       variant="destructive"
                       size="sm"
                       onClick={() => handleDeleteController(controller.id)}
+                      className="hover:bg-red-600"
                     >
                       <Trash2 className="w-4 h-4" />
                     </Button>
@@ -337,6 +315,7 @@ const handleImportConfig = async (event) => {
                   value={formData.ip_address}
                   onChange={(e) => setFormData({ ...formData, ip_address: e.target.value })}
                   placeholder="192.168.1.100"
+                  pattern="^(?:[0-9]{1,3}\.){3}[0-9]{1,3}$"
                   required
                 />
               </div>
@@ -389,7 +368,17 @@ const handleImportConfig = async (event) => {
                 <Button
                   type="button"
                   variant="outline"
-                  onClick={() => setShowAddDialog(false)}
+                  onClick={() => {
+                    setShowAddDialog(false);
+                    setFormData({
+                      name: '',
+                      ip_address: '',
+                      port: '80',
+                      username: '',
+                      password: '',
+                      location: ''
+                    });
+                  }}
                 >
                   Cancel
                 </Button>
