@@ -106,43 +106,39 @@ const ControllersManagement = () => {
     }
   };
 
-  const checkStatus = async (controller) => {
-    try {
-      await hikvisionService.initializeController(controller);
-      const status = await hikvisionService.getDeviceStatus(controller.id);
-      
-      setControllers(prev => prev.map(c => {
-        if (c.id === controller.id) {
-          return {
-            ...c,
-            status: 'online',
-            last_online: new Date().toISOString(),
-            cpuUsage: status.cpuUsage,
-            memoryUsage: status.memoryUsage
-          };
-        }
-        return c;
-      }));
+const checkStatus = async (controller) => {
+  try {
+    await hikvisionService.initializeController(controller);
+    const status = await hikvisionService.getDeviceStatus(controller.id);
+    
+    await updateControllerStatus(controller.id, {
+      status: 'online',
+      cpuUsage: status.cpuUsage,
+      memoryUsage: status.memoryUsage
+    });
 
-      toast({
-        title: 'Status Updated',
-        description: `${controller.name} is online`,
-      });
-    } catch (error) {
-      setControllers(prev => prev.map(c => {
-        if (c.id === controller.id) {
-          return { ...c, status: 'offline' };
-        }
-        return c;
-      }));
+    // Update local state
+    setControllers(getControllers());
 
-      toast({
-        title: 'Status Check Failed',
-        description: `${controller.name} is offline`,
-        variant: 'destructive'
-      });
-    }
-  };
+    toast({
+      title: 'Status Updated',
+      description: `${controller.name} is online`,
+    });
+  } catch (error) {
+    await updateControllerStatus(controller.id, {
+      status: 'offline'
+    });
+
+    // Update local state
+    setControllers(getControllers());
+
+    toast({
+      title: 'Status Check Failed',
+      description: `${controller.name} is offline`,
+      variant: 'destructive'
+    });
+  }
+};
 
   return (
     <div className="p-6">
