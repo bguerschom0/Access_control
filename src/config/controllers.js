@@ -1,49 +1,53 @@
-// Initial controllers list (can be empty)
-let controllers = [
-  // Example controller format:
-  // {
-  //   id: "controller1",
-  //   name: "Main Entrance",
-  //   ip_address: "192.168.1.100",
-  //   port: "80",
-  //   username: "admin",
-  //   password: "****",
-  //   location: "Building A",
-  //   status: "offline",
-  //   last_online: null
-  // }
-];
+import fs from 'fs';
+import path from 'path';
 
-// Load saved controllers from localStorage on initialization
-try {
-  const savedControllers = localStorage.getItem('hik_controllers');
-  if (savedControllers) {
-    controllers = JSON.parse(savedControllers);
+const CONTROLLERS_FILE = path.join(process.cwd(), 'src', 'data', 'controllers.json');
+
+// Read controllers from JSON file
+const readControllersFile = () => {
+  try {
+    const data = fs.readFileSync(CONTROLLERS_FILE, 'utf8');
+    return JSON.parse(data).controllers;
+  } catch (error) {
+    console.error('Error reading controllers file:', error);
+    return [];
   }
-} catch (error) {
-  console.error('Error loading saved controllers:', error);
-}
+};
+
+// Write controllers to JSON file
+const writeControllersFile = (controllers) => {
+  try {
+    fs.writeFileSync(
+      CONTROLLERS_FILE,
+      JSON.stringify({ controllers }, null, 2),
+      'utf8'
+    );
+    return true;
+  } catch (error) {
+    console.error('Error writing controllers file:', error);
+    return false;
+  }
+};
 
 // Get all controllers
 export const getControllers = () => {
-  return controllers;
+  return readControllersFile();
 };
 
 // Add a new controller
 export const addController = async (newController) => {
   try {
+    const controllers = readControllersFile();
     const controllerData = {
       id: `controller_${Date.now()}`,
       ...newController,
       status: 'offline',
-      last_online: null
+      last_online: null,
+      created_at: new Date().toISOString()
     };
 
-    // Add to memory
     controllers.unshift(controllerData);
-
-    // Save to localStorage
-    localStorage.setItem('hik_controllers', JSON.stringify(controllers));
+    writeControllersFile(controllers);
 
     return controllerData;
   } catch (error) {
@@ -55,12 +59,9 @@ export const addController = async (newController) => {
 // Remove a controller
 export const removeController = async (controllerId) => {
   try {
-    // Remove from memory
-    controllers = controllers.filter(c => c.id !== controllerId);
-
-    // Save to localStorage
-    localStorage.setItem('hik_controllers', JSON.stringify(controllers));
-
+    const controllers = readControllersFile();
+    const updatedControllers = controllers.filter(c => c.id !== controllerId);
+    writeControllersFile(updatedControllers);
     return true;
   } catch (error) {
     console.error('Error removing controller:', error);
@@ -71,7 +72,8 @@ export const removeController = async (controllerId) => {
 // Update a controller's status
 export const updateControllerStatus = async (controllerId, status) => {
   try {
-    controllers = controllers.map(c => {
+    const controllers = readControllersFile();
+    const updatedControllers = controllers.map(c => {
       if (c.id === controllerId) {
         return {
           ...c,
@@ -82,9 +84,7 @@ export const updateControllerStatus = async (controllerId, status) => {
       return c;
     });
 
-    // Save to localStorage
-    localStorage.setItem('hik_controllers', JSON.stringify(controllers));
-
+    writeControllersFile(updatedControllers);
     return true;
   } catch (error) {
     console.error('Error updating controller status:', error);
@@ -94,23 +94,31 @@ export const updateControllerStatus = async (controllerId, status) => {
 
 // Get controller by ID
 export const getControllerById = (controllerId) => {
+  const controllers = readControllersFile();
   return controllers.find(c => c.id === controllerId);
 };
 
-// Export controllers data (for backup)
-export const exportControllers = () => {
-  return JSON.stringify(controllers, null, 2);
-};
-
-// Import controllers data (from backup)
-export const importControllers = (controllersData) => {
+// Backup controllers to a specific file
+export const backupControllers = (filePath) => {
   try {
-    const parsed = JSON.parse(controllersData);
-    controllers = parsed;
-    localStorage.setItem('hik_controllers', JSON.stringify(controllers));
+    const controllers = readControllersFile();
+    fs.writeFileSync(filePath, JSON.stringify({ controllers }, null, 2), 'utf8');
     return true;
   } catch (error) {
-    console.error('Error importing controllers:', error);
+    console.error('Error creating backup:', error);
+    throw error;
+  }
+};
+
+// Restore controllers from a backup file
+export const restoreFromBackup = (filePath) => {
+  try {
+    const data = fs.readFileSync(filePath, 'utf8');
+    const { controllers } = JSON.parse(data);
+    writeControllersFile(controllers);
+    return true;
+  } catch (error) {
+    console.error('Error restoring from backup:', error);
     throw error;
   }
 };
