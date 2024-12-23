@@ -140,6 +140,61 @@ const checkStatus = async (controller) => {
   }
 };
 
+  // Add these functions to ControllersManagement.jsx
+
+const handleExportConfig = () => {
+  try {
+    const configData = exportControllers();
+    const blob = new Blob([configData], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `hik-controllers-${new Date().toISOString().split('T')[0]}.json`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  } catch (error) {
+    toast({
+      title: 'Export Failed',
+      description: 'Failed to export controllers configuration',
+      variant: 'destructive'
+    });
+  }
+};
+
+const handleImportConfig = async (event) => {
+  try {
+    const file = event.target.files[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = async (e) => {
+      try {
+        await importControllers(e.target.result);
+        setControllers(getControllers());
+        toast({
+          title: 'Import Successful',
+          description: 'Controllers configuration imported successfully'
+        });
+      } catch (error) {
+        toast({
+          title: 'Import Failed',
+          description: 'Invalid configuration file',
+          variant: 'destructive'
+        });
+      }
+    };
+    reader.readAsText(file);
+  } catch (error) {
+    toast({
+      title: 'Import Failed',
+      description: 'Failed to import controllers configuration',
+      variant: 'destructive'
+    });
+  }
+};
+
   return (
     <div className="p-6">
       <div className="max-w-7xl mx-auto space-y-6">
