@@ -5,13 +5,13 @@ import {
   Settings,
   Power,
   Signal,
-  RefreshCcw
+  RefreshCcw,
+  AlertTriangle
 } from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Textarea } from '@/components/ui/textarea';
 import { 
   Dialog, 
   DialogContent, 
@@ -25,21 +25,25 @@ import {
   CardHeader,
   CardTitle,
 } from '@/components/ui/card';
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { useToast } from '@/components/ui/use-toast';
 import { Toaster } from '@/components/ui/toaster';
 
-import { hikvisionService } from '@/services/hikvision';
 import { getControllers, addController, removeController } from '@/config/controllers';
-
-const ControllersManagement = () => {
-  const { toast } = useToast();
-
+import { hikvisionService } from '@/services/hikvision';
 
 const ControllersManagement = () => {
   const { toast } = useToast();
   const [controllers, setControllers] = useState(() => getControllers());
-  
-  // ... rest of the component code
+  const [showAddDialog, setShowAddDialog] = useState(false);
+  const [formData, setFormData] = useState({
+    name: '',
+    ip_address: '',
+    port: '80',
+    username: '',
+    password: '',
+    location: ''
+  });
 
   const handleAddController = async (e) => {
     e.preventDefault();
@@ -101,77 +105,6 @@ const ControllersManagement = () => {
       });
     }
   };
-  const [showAddDialog, setShowAddDialog] = useState(false);
-  const [formData, setFormData] = useState({
-    name: '',
-    ip_address: '',
-    port: '80',
-    username: '',
-    password: '',
-    location: ''
-  });
-
-  // Save to localStorage whenever controllers change
-  useEffect(() => {
-    localStorage.setItem('controllers', JSON.stringify(controllers));
-  }, [controllers]);
-
-  const handleAddController = async (e) => {
-    e.preventDefault();
-    
-    try {
-      // Test connection
-      const isValid = await hikvisionService.validateCredentials(formData);
-      if (!isValid) {
-        toast({
-          title: 'Connection Failed',
-          description: 'Could not connect to the controller. Please check credentials.',
-          variant: 'destructive'
-        });
-        return;
-      }
-
-      const newController = {
-        id: Date.now().toString(),
-        ...formData,
-        status: 'offline',
-        last_online: null
-      };
-
-      setControllers(prev => [newController, ...prev]);
-      setShowAddDialog(false);
-      setFormData({
-        name: '',
-        ip_address: '',
-        port: '80',
-        username: '',
-        password: '',
-        location: ''
-      });
-
-      toast({
-        title: 'Success',
-        description: 'Controller added successfully'
-      });
-
-      // Initialize controller
-      await hikvisionService.initializeController(newController);
-    } catch (error) {
-      toast({
-        title: 'Error',
-        description: error.message || 'Failed to add controller',
-        variant: 'destructive'
-      });
-    }
-  };
-
-  const handleDeleteController = (id) => {
-    setControllers(prev => prev.filter(c => c.id !== id));
-    toast({
-      title: 'Success',
-      description: 'Controller removed successfully'
-    });
-  };
 
   const checkStatus = async (controller) => {
     try {
@@ -214,6 +147,7 @@ const ControllersManagement = () => {
   return (
     <div className="p-6">
       <div className="max-w-7xl mx-auto space-y-6">
+        {/* Header */}
         <div className="flex justify-between items-center">
           <div>
             <h1 className="text-2xl font-bold text-gray-900">HIKVision Controllers</h1>
@@ -225,6 +159,18 @@ const ControllersManagement = () => {
           </Button>
         </div>
 
+        {/* Warning if no controllers */}
+        {controllers.length === 0 && (
+          <Alert>
+            <AlertTriangle className="h-4 w-4" />
+            <AlertTitle>No Controllers Found</AlertTitle>
+            <AlertDescription>
+              Add your first HIKVision controller to get started.
+            </AlertDescription>
+          </Alert>
+        )}
+
+        {/* Controllers Grid */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
           {controllers.map((controller) => (
             <Card key={controller.id}>
