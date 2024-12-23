@@ -1,8 +1,6 @@
 import { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
 import {
   Plus,
-  Loader2,
   Trash2,
   Settings,
   Power,
@@ -10,106 +8,72 @@ import {
   RefreshCcw
 } from 'lucide-react';
 
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogFooter,
-} from '@/components/ui/dialog';
+import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
-import {
+import { 
+  Dialog, 
+  DialogContent, 
+  DialogHeader, 
+  DialogTitle, 
+  DialogFooter 
+} from '@/components/ui/dialog';
+import { 
   Card,
   CardContent,
   CardHeader,
   CardTitle,
 } from '@/components/ui/card';
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-} from '@/components/ui/alert-dialog';
 import { useToast } from '@/components/ui/use-toast';
 import { Toaster } from '@/components/ui/toaster';
-import HIKSetup from '@/components/hik/HIKSetup';
 
-import { supabase } from '@/config/supabase';
 import { hikvisionService } from '@/services/hikvision';
 
-
 const ControllersManagement = () => {
-  const navigate = useNavigate();
   const { toast } = useToast();
-  const [pageLoading, setPageLoading] = useState(true);
-  const [controllers, setControllers] = useState([]);
-  const [loading, setLoading] = useState(true);
+  const [controllers, setControllers] = useState(() => {
+    const saved = localStorage.getItem('controllers');
+    return saved ? JSON.parse(saved) : [];
+  });
   const [showAddDialog, setShowAddDialog] = useState(false);
-  const [showDeleteDialog, setShowDeleteDialog] = useState(false);
-  const [selectedController, setSelectedController] = useState(null);
   const [formData, setFormData] = useState({
     name: '',
     ip_address: '',
     port: '80',
     username: '',
     password: '',
-    location: '',
-    description: ''
+    location: ''
   });
 
+  // Save to localStorage whenever controllers change
   useEffect(() => {
-    if (controllers.length > 0) {
-      controllers.forEach(controller => {
-        hikvisionService.initializeController(controller);
-      });
-    }
+    localStorage.setItem('controllers', JSON.stringify(controllers));
   }, [controllers]);
 
-  const fetchControllers = async () => {
+  const handleAddController = async (e) => {
+    e.preventDefault();
+    
     try {
-      setLoading(true);
-      const { data, error } = await supabase
-        .from('controllers')
-        .select('*')
-        .order('created_at', { ascending: false });
+      // Test connection
+      const isValid = await hikvisionService.validateCredentials(formData);
+      if (!isValid) {
+        toast({
+          title: 'Connection Failed',
+          description: 'Could not connect to the controller. Please check credentials.',
+          variant: 'destructive'
+        });
+        return;
+      }
 
-      if (error) throw error;
-      setControllers(data || []);
+      const newController = {
+        id: Date.now().toString(),
+        ...formData,
+        status: 'offline',
+        last_online: null
+      };
 
-      // Check initial status for all controllers
-      data?.forEach(controller => {
-        hikvisionService.getDeviceStatus(controller.id).catch(console.error);
-      });
-    } catch (error) {
-      toast({
-        title: 'Error',
-        description: 'Failed to fetch controllers',
-        variant: 'destructive'
-      });
-    } finally {
-      setLoading(false);
-    }
-  };
-
-const handleAddController = async (e) => {
-  e.preventDefault();
-  try {
-    const { data, error } = await supabase
-      .from('controllers')
-      .insert([formData])
-      .select()
-      .single();
-
-      if (error) throw error;
-
-      setControllers([data, ...controllers]);
+      setControllers(prev => [newController, ...prev]);
       setShowAddDialog(false);
       setFormData({
         name: '',
@@ -117,8 +81,7 @@ const handleAddController = async (e) => {
         port: '80',
         username: '',
         password: '',
-        location: '',
-        description: ''
+        location: ''
       });
 
       toast({
@@ -126,9 +89,8 @@ const handleAddController = async (e) => {
         description: 'Controller added successfully'
       });
 
-      // Initialize and check new controller status
-      await hikvisionService.initializeController(data);
-      hikvisionService.getDeviceStatus(data.id).catch(console.error);
+      // Initialize controller
+      await hikvisionService.initializeController(newController);
     } catch (error) {
       toast({
         title: 'Error',
@@ -138,60 +100,43 @@ const handleAddController = async (e) => {
     }
   };
 
-  const handleDeleteController = async () => {
-    try {
-      const { error } = await supabase
-        .from('controllers')
-        .delete()
-        .eq('id', selectedController.id);
-
-      if (error) throw error;
-
-      setControllers(controllers.filter(c => c.id !== selectedController.id));
-      setShowDeleteDialog(false);
-      setSelectedController(null);
-
-      toast({
-        title: 'Success',
-        description: 'Controller deleted successfully'
-      });
-    } catch (error) {
-      toast({
-        title: 'Error',
-        description: error.message || 'Failed to delete controller',
-        variant: 'destructive'
-      });
-    }
+  const handleDeleteController = (id) => {
+    setControllers(prev => prev.filter(c => c.id !== id));
+    toast({
+      title: 'Success',
+      description: 'Controller removed successfully'
+    });
   };
 
   const checkStatus = async (controller) => {
     try {
+      await hikvisionService.initializeController(controller);
       const status = await hikvisionService.getDeviceStatus(controller.id);
-      const updatedControllers = controllers.map(c => {
+      
+      setControllers(prev => prev.map(c => {
         if (c.id === controller.id) {
           return {
             ...c,
             status: 'online',
+            last_online: new Date().toISOString(),
             cpuUsage: status.cpuUsage,
             memoryUsage: status.memoryUsage
           };
         }
         return c;
-      });
-      setControllers(updatedControllers);
+      }));
 
       toast({
         title: 'Status Updated',
         description: `${controller.name} is online`,
       });
     } catch (error) {
-      const updatedControllers = controllers.map(c => {
+      setControllers(prev => prev.map(c => {
         if (c.id === controller.id) {
           return { ...c, status: 'offline' };
         }
         return c;
-      });
-      setControllers(updatedControllers);
+      }));
 
       toast({
         title: 'Status Check Failed',
@@ -201,22 +146,13 @@ const handleAddController = async (e) => {
     }
   };
 
-  if (pageLoading || loading) {
-    return (
-      <div className="flex items-center justify-center min-h-screen">
-        <Loader2 className="w-8 h-8 animate-spin text-blue-600" />
-      </div>
-    );
-  }
-
   return (
     <div className="p-6">
       <div className="max-w-7xl mx-auto space-y-6">
-        <HIKSetup />
         <div className="flex justify-between items-center">
           <div>
-            <h1 className="text-2xl font-bold text-gray-900">Access Controllers</h1>
-            <p className="text-gray-500">Manage and monitor access control devices</p>
+            <h1 className="text-2xl font-bold text-gray-900">HIKVision Controllers</h1>
+            <p className="text-gray-500">Manage your access control devices</p>
           </div>
           <Button onClick={() => setShowAddDialog(true)}>
             <Plus className="w-4 h-4 mr-2" />
@@ -267,15 +203,25 @@ const handleAddController = async (e) => {
                     <span className="font-medium">{controller.ip_address}</span>
                   </div>
                   <div className="flex justify-between text-sm">
-                    <span className="text-gray-500">Connection:</span>
-                    <span className="font-medium">
-                      {controller.protocol?.toUpperCase() || 'HTTP'}://{controller.ip_address}:{controller.port}
-                    </span>
+                    <span className="text-gray-500">Port:</span>
+                    <span className="font-medium">{controller.port}</span>
                   </div>
+                  {controller.status === 'online' && (
+                    <>
+                      <div className="flex justify-between text-sm">
+                        <span className="text-gray-500">CPU Usage:</span>
+                        <span className="font-medium">{controller.cpuUsage}%</span>
+                      </div>
+                      <div className="flex justify-between text-sm">
+                        <span className="text-gray-500">Memory Usage:</span>
+                        <span className="font-medium">{controller.memoryUsage}%</span>
+                      </div>
+                    </>
+                  )}
                   <div className="flex justify-between text-sm">
                     <span className="text-gray-500">Last Online:</span>
                     <span className="font-medium">
-                      {controller.last_online
+                      {controller.last_online 
                         ? new Date(controller.last_online).toLocaleString()
                         : 'Never'}
                     </span>
@@ -285,7 +231,7 @@ const handleAddController = async (e) => {
                     <Button
                       variant="outline"
                       size="sm"
-                      onClick={() => navigate(`/access-control/controllers/${controller.id}/settings`)}
+                      onClick={() => {}}
                     >
                       <Settings className="w-4 h-4 mr-2" />
                       Settings
@@ -293,10 +239,7 @@ const handleAddController = async (e) => {
                     <Button
                       variant="destructive"
                       size="sm"
-                      onClick={() => {
-                        setSelectedController(controller);
-                        setShowDeleteDialog(true);
-                      }}
+                      onClick={() => handleDeleteController(controller.id)}
                     >
                       <Trash2 className="w-4 h-4" />
                     </Button>
@@ -315,11 +258,12 @@ const handleAddController = async (e) => {
             </DialogHeader>
             <form onSubmit={handleAddController} className="space-y-4">
               <div className="space-y-2">
-                <Label htmlFor="name">Name</Label>
+                <Label htmlFor="name">Controller Name</Label>
                 <Input
                   id="name"
                   value={formData.name}
                   onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+                  placeholder="Main Entrance Controller"
                   required
                 />
               </div>
@@ -331,7 +275,6 @@ const handleAddController = async (e) => {
                   value={formData.ip_address}
                   onChange={(e) => setFormData({ ...formData, ip_address: e.target.value })}
                   placeholder="192.168.1.100"
-                  pattern="^(?:[0-9]{1,3}\.){3}[0-9]{1,3}$"
                   required
                 />
               </div>
@@ -354,6 +297,7 @@ const handleAddController = async (e) => {
                   id="username"
                   value={formData.username}
                   onChange={(e) => setFormData({ ...formData, username: e.target.value })}
+                  placeholder="admin"
                   required
                 />
               </div>
@@ -379,17 +323,6 @@ const handleAddController = async (e) => {
                 />
               </div>
 
-              <div className="space-y-2">
-                <Label htmlFor="description">Description</Label>
-                <Textarea
-                  id="description"
-                  value={formData.description}
-                  onChange={(e) => setFormData({ ...formData, description: e.target.value })}
-                  placeholder="Additional details about the controller"
-                  rows={3}
-                />
-              </div>
-
               <DialogFooter>
                 <Button
                   type="button"
@@ -403,26 +336,6 @@ const handleAddController = async (e) => {
             </form>
           </DialogContent>
         </Dialog>
-
-        {/* Delete Confirmation Dialog */}
-        <AlertDialog open={showDeleteDialog} onOpenChange={setShowDeleteDialog}>
-          <AlertDialogContent>
-            <AlertDialogHeader>
-              <AlertDialogTitle>Delete Controller</AlertDialogTitle>
-              <AlertDialogDescription>
-                Are you sure you want to delete {selectedController?.name}? This action cannot be undone.
-              </AlertDialogDescription>
-            </AlertDialogHeader>
-            <AlertDialogFooter>
-              <AlertDialogCancel onClick={() => setShowDeleteDialog(false)}>
-                Cancel
-              </AlertDialogCancel>
-              <AlertDialogAction onClick={handleDeleteController}>
-                Delete
-              </AlertDialogAction>
-            </AlertDialogFooter>
-          </AlertDialogContent>
-        </AlertDialog>
 
         <Toaster />
       </div>
