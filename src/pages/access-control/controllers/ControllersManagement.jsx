@@ -32,10 +32,74 @@ import { hikvisionService } from '@/services/hikvision';
 
 const ControllersManagement = () => {
   const { toast } = useToast();
-  const [controllers, setControllers] = useState(() => {
-    const saved = localStorage.getItem('controllers');
-    return saved ? JSON.parse(saved) : [];
-  });
+import { getControllers, addController, removeController } from '@/config/controllers';
+
+const ControllersManagement = () => {
+  const { toast } = useToast();
+  const [controllers, setControllers] = useState(() => getControllers());
+  
+  // ... rest of the component code
+
+  const handleAddController = async (e) => {
+    e.preventDefault();
+    
+    try {
+      // Test connection
+      const isValid = await hikvisionService.validateCredentials(formData);
+      if (!isValid) {
+        toast({
+          title: 'Connection Failed',
+          description: 'Could not connect to the controller. Please check credentials.',
+          variant: 'destructive'
+        });
+        return;
+      }
+
+      // Add to configuration
+      const newController = await addController(formData);
+      setControllers(prev => [newController, ...prev]);
+      setShowAddDialog(false);
+      setFormData({
+        name: '',
+        ip_address: '',
+        port: '80',
+        username: '',
+        password: '',
+        location: ''
+      });
+
+      toast({
+        title: 'Success',
+        description: 'Controller added successfully'
+      });
+
+      // Initialize controller
+      await hikvisionService.initializeController(newController);
+    } catch (error) {
+      toast({
+        title: 'Error',
+        description: error.message || 'Failed to add controller',
+        variant: 'destructive'
+      });
+    }
+  };
+
+  const handleDeleteController = async (id) => {
+    try {
+      await removeController(id);
+      setControllers(prev => prev.filter(c => c.id !== id));
+      toast({
+        title: 'Success',
+        description: 'Controller removed successfully'
+      });
+    } catch (error) {
+      toast({
+        title: 'Error',
+        description: 'Failed to remove controller',
+        variant: 'destructive'
+      });
+    }
+  };
   const [showAddDialog, setShowAddDialog] = useState(false);
   const [formData, setFormData] = useState({
     name: '',
