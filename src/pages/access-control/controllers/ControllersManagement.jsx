@@ -29,10 +29,11 @@ import { useToast } from '@/components/ui/use-toast';
 import { Toaster } from '@/components/ui/toaster';
 
 import { hikvisionService } from '@/services/hikvision';
+import { getControllers, addController, removeController } from '@/config/controllers';
 
 const ControllersManagement = () => {
   const { toast } = useToast();
-import { getControllers, addController, removeController } from '@/config/controllers';
+
 
 const ControllersManagement = () => {
   const { toast } = useToast();
