@@ -1,56 +1,51 @@
-// Function to decrypt passwords (implement your encryption method)
-const decryptPassword = (encryptedPassword) => {
-  // Implement decryption logic
-  return encryptedPassword;
-};
+// Initial controllers list (can be empty)
+let controllers = [
+  // Example controller format:
+  // {
+  //   id: "controller1",
+  //   name: "Main Entrance",
+  //   ip_address: "192.168.1.100",
+  //   port: "80",
+  //   username: "admin",
+  //   password: "****",
+  //   location: "Building A",
+  //   status: "offline",
+  //   last_online: null
+  // }
+];
 
-// Get controllers from environment
-export const getControllers = () => {
-  try {
-    const controllersStr = import.meta.env.VITE_CONTROLLERS;
-    const passwordsStr = import.meta.env.VITE_CONTROLLER_PASSWORDS;
-
-    const controllers = JSON.parse(controllersStr || '[]');
-    const passwords = JSON.parse(passwordsStr || '{}');
-
-    // Merge passwords with controller data
-    return controllers.map(controller => ({
-      ...controller,
-      password: decryptPassword(passwords[controller.id])
-    }));
-  } catch (error) {
-    console.error('Error parsing controllers configuration:', error);
-    return [];
+// Load saved controllers from localStorage on initialization
+try {
+  const savedControllers = localStorage.getItem('hik_controllers');
+  if (savedControllers) {
+    controllers = JSON.parse(savedControllers);
   }
+} catch (error) {
+  console.error('Error loading saved controllers:', error);
+}
+
+// Get all controllers
+export const getControllers = () => {
+  return controllers;
 };
 
 // Add a new controller
 export const addController = async (newController) => {
   try {
-    // Read current configuration
-    const currentControllers = getControllers();
-    const currentPasswords = JSON.parse(import.meta.env.VITE_CONTROLLER_PASSWORDS || '{}');
-
-    // Add new controller
-    const controllerId = `controller${Date.now()}`;
     const controllerData = {
-      id: controllerId,
-      name: newController.name,
-      ip_address: newController.ip_address,
-      port: newController.port,
-      username: newController.username,
-      location: newController.location
+      id: `controller_${Date.now()}`,
+      ...newController,
+      status: 'offline',
+      last_online: null
     };
 
-    // Update passwords separately
-    currentPasswords[controllerId] = newController.password; // Implement encryption
+    // Add to memory
+    controllers.unshift(controllerData);
 
-    // You would typically update your .env file here
-    // For development, we'll use localStorage as a temporary storage
-    localStorage.setItem('VITE_CONTROLLERS', JSON.stringify([...currentControllers, controllerData]));
-    localStorage.setItem('VITE_CONTROLLER_PASSWORDS', JSON.stringify(currentPasswords));
+    // Save to localStorage
+    localStorage.setItem('hik_controllers', JSON.stringify(controllers));
 
-    return { ...controllerData, password: newController.password };
+    return controllerData;
   } catch (error) {
     console.error('Error adding controller:', error);
     throw error;
@@ -60,16 +55,11 @@ export const addController = async (newController) => {
 // Remove a controller
 export const removeController = async (controllerId) => {
   try {
-    const currentControllers = getControllers();
-    const currentPasswords = JSON.parse(import.meta.env.VITE_CONTROLLER_PASSWORDS || '{}');
+    // Remove from memory
+    controllers = controllers.filter(c => c.id !== controllerId);
 
-    // Filter out the controller
-    const updatedControllers = currentControllers.filter(c => c.id !== controllerId);
-    delete currentPasswords[controllerId];
-
-    // Update storage
-    localStorage.setItem('VITE_CONTROLLERS', JSON.stringify(updatedControllers));
-    localStorage.setItem('VITE_CONTROLLER_PASSWORDS', JSON.stringify(currentPasswords));
+    // Save to localStorage
+    localStorage.setItem('hik_controllers', JSON.stringify(controllers));
 
     return true;
   } catch (error) {
@@ -78,8 +68,49 @@ export const removeController = async (controllerId) => {
   }
 };
 
-// Get controller by ID with password
+// Update a controller's status
+export const updateControllerStatus = async (controllerId, status) => {
+  try {
+    controllers = controllers.map(c => {
+      if (c.id === controllerId) {
+        return {
+          ...c,
+          ...status,
+          last_online: status.status === 'online' ? new Date().toISOString() : c.last_online
+        };
+      }
+      return c;
+    });
+
+    // Save to localStorage
+    localStorage.setItem('hik_controllers', JSON.stringify(controllers));
+
+    return true;
+  } catch (error) {
+    console.error('Error updating controller status:', error);
+    throw error;
+  }
+};
+
+// Get controller by ID
 export const getControllerById = (controllerId) => {
-  const controllers = getControllers();
   return controllers.find(c => c.id === controllerId);
+};
+
+// Export controllers data (for backup)
+export const exportControllers = () => {
+  return JSON.stringify(controllers, null, 2);
+};
+
+// Import controllers data (from backup)
+export const importControllers = (controllersData) => {
+  try {
+    const parsed = JSON.parse(controllersData);
+    controllers = parsed;
+    localStorage.setItem('hik_controllers', JSON.stringify(controllers));
+    return true;
+  } catch (error) {
+    console.error('Error importing controllers:', error);
+    throw error;
+  }
 };
