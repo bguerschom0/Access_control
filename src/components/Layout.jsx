@@ -29,6 +29,11 @@ const navigation = [
     href: '/attendance',
     icon: Clock
   },
+   {
+   name: 'Personnel',
+   href: '/personnel', 
+   icon: Users
+ },
   {
     name: 'Reports',
     href: '/reports',
