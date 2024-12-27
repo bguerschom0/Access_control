@@ -1,4 +1,3 @@
-// src/services/hikvision.js
 import axios from 'axios';
 
 class HikvisionService {
@@ -12,105 +11,32 @@ class HikvisionService {
     };
   }
 
-  async checkHttpsSupport(instance) {
-    try {
-      const response = await instance.get('/ISAPI/System/capabilities');
-      // Look for HTTPS support in capabilities
-      const supportsHttps = response.data?.isSupportHTTPS === true;
-      return supportsHttps;
-    } catch (error) {
-      console.error('Error checking HTTPS support:', error);
-      return false;
-    }
-  }
-
   async initializeController(controller) {
     try {
-      // Try HTTPS first (port 443)
-      try {
-        const httpsInstance = axios.create({
-          baseURL: `https://${controller.ip_address}:443`,
-          headers: {
-            ...this.createAuthHeader(controller.username, controller.password),
-            'Content-Type': 'application/json',
-          },
-          timeout: 5000,
-          httpsAgent: {
-            rejectUnauthorized: false // Accept self-signed certificates
-          }
-        });
-
-        // Test HTTPS connection
-        const isHttpsSupported = await this.checkHttpsSupport(httpsInstance);
-        
-        if (isHttpsSupported) {
-          this.controllers.set(controller.id, {
-            instance: httpsInstance,
-            protocol: 'https',
-            port: 443
-          });
-          console.log('Successfully connected via HTTPS');
-          return true;
-        }
-      } catch (error) {
-        console.warn('HTTPS connection failed, falling back to HTTP');
-      }
-
-      // Try HTTP on specified port or default 80
-      const httpInstance = axios.create({
-        baseURL: `http://${controller.ip_address}:${controller.port || 80}`,
+      // Create axios instance for this controller
+      const instance = axios.create({
+        baseURL: `http://${controller.ip_address}:${controller.port}`,
         headers: {
           ...this.createAuthHeader(controller.username, controller.password),
-          'Content-Type': 'application/json',
+          'Content-Type': 'application/json'
         },
         timeout: 5000
       });
 
-      // Test HTTP connection
-      await httpInstance.get('/ISAPI/System/capabilities');
+      // Test connection with capabilities check
+      const response = await instance.get('/ISAPI/System/capabilities');
       
+      // Store the instance if successful
       this.controllers.set(controller.id, {
-        instance: httpInstance,
-        protocol: 'http',
-        port: controller.port || 80
+        instance,
+        capabilities: response.data,
+        lastChecked: new Date()
       });
-      
-      console.log('Successfully connected via HTTP');
-      return true;
 
+      return true;
     } catch (error) {
       console.error('Failed to initialize controller:', error);
-      throw new Error('Could not connect to controller. Please check credentials and network access.');
-    }
-  }
-
-  async getDeviceCertificateInfo(controllerId) {
-    try {
-      const controller = this.controllers.get(controllerId);
-      if (!controller) throw new Error('Controller not initialized');
-
-      const response = await controller.instance.get('/ISAPI/Security/certificate?format=json');
-      return response.data;
-    } catch (error) {
-      console.error('Error fetching certificate info:', error);
-      throw error;
-    }
-  }
-
-  async checkDeviceHttpsStatus(controllerId) {
-    try {
-      const controller = this.controllers.get(controllerId);
-      if (!controller) throw new Error('Controller not initialized');
-
-      const response = await controller.instance.get('/ISAPI/System/security?format=json');
-      return {
-        httpsEnabled: response.data?.httpsEnabled || false,
-        currentProtocol: controller.protocol,
-        port: controller.port
-      };
-    } catch (error) {
-      console.error('Error checking HTTPS status:', error);
-      throw error;
+      return false;
     }
   }
 
@@ -119,80 +45,83 @@ class HikvisionService {
       const controller = this.controllers.get(controllerId);
       if (!controller) throw new Error('Controller not initialized');
 
-      const response = await controller.instance.get('/ISAPI/System/status?format=json');
+      const response = await controller.instance.get('/ISAPI/System/status');
       
       return {
         isOnline: true,
         cpuUsage: response.data.cpuUsage,
         memoryUsage: response.data.memoryUsage,
         temperature: response.data.temperature,
-        uptimeSeconds: response.data.uptimeSeconds,
-        protocol: controller.protocol,
-        port: controller.port
+        uptimeSeconds: response.data.uptimeSeconds
       };
     } catch (error) {
-      throw new Error('Failed to get device status: ' + error.message);
+      console.error('Error getting device status:', error);
+      throw error;
     }
   }
 
-  async validateCredentials(controller) {
-    try {
-      // Try HTTPS first
-      try {
-        const httpsInstance = axios.create({
-          baseURL: `https://${controller.ip_address}:443`,
-          headers: this.createAuthHeader(controller.username, controller.password),
-          timeout: 5000,
-          httpsAgent: {
-            rejectUnauthorized: false
-          }
-        });
-        
-        const response = await httpsInstance.get('/ISAPI/System/capabilities');
-        return { isValid: response.status === 200, protocol: 'https', port: 443 };
-      } catch (error) {
-        // Try HTTP if HTTPS fails
-        const httpInstance = axios.create({
-          baseURL: `http://${controller.ip_address}:${controller.port || 80}`,
-          headers: this.createAuthHeader(controller.username, controller.password),
-          timeout: 5000
-        });
-        
-        const response = await httpInstance.get('/ISAPI/System/capabilities');
-        return { isValid: response.status === 200, protocol: 'http', port: controller.port || 80 };
-      }
-    } catch (error) {
-      return { isValid: false, error: error.message };
-    }
-  }
-
-  // Optional: Method to force HTTPS upgrade if supported
-  async upgradeToHttps(controllerId) {
+  async getAttendanceRecords(controllerId, startTime, endTime) {
     try {
       const controller = this.controllers.get(controllerId);
       if (!controller) throw new Error('Controller not initialized');
 
-      // Check if HTTPS is supported
-      const isHttpsSupported = await this.checkHttpsSupport(controller.instance);
-      if (!isHttpsSupported) {
-        throw new Error('HTTPS is not supported by this device');
-      }
-
-      // Enable HTTPS through the security settings
-      await controller.instance.put('/ISAPI/System/security?format=json', {
-        httpsEnabled: true
+      const response = await controller.instance.post('/ISAPI/AccessControl/AcsEvent/search', {
+        searchID: Date.now().toString(),
+        searchResultPosition: 0,
+        maxResults: 1000,
+        timeRange: {
+          startTime: startTime.toISOString(),
+          endTime: endTime.toISOString()
+        },
+        major: 0, // All events
+        minor: 0, // All sub-types
+        eventType: 'attendance' // Focus on attendance events
       });
 
-      // Re-initialize the controller with HTTPS
-      await this.initializeController({
-        ...controller,
-        port: 443
-      });
-
-      return true;
+      return this.processAttendanceRecords(response.data.AcsEvent);
     } catch (error) {
-      console.error('Error upgrading to HTTPS:', error);
+      console.error('Error fetching attendance records:', error);
       throw error;
+    }
+  }
+
+  processAttendanceRecords(events) {
+    return events.map(event => ({
+      employeeId: event.employeeNo,
+      employeeName: event.employeeName,
+      eventTime: event.time,
+      eventType: event.eventType,
+      deviceName: event.deviceName,
+      verifyMode: event.verifyMode, // Card, Face, Fingerprint, etc.
+      status: this.getEventStatus(event)
+    }));
+  }
+
+  getEventStatus(event) {
+    // Map event codes to human-readable status
+    const statusMap = {
+      'normal': 'Success',
+      'invalid_card': 'Failed - Invalid Card',
+      'invalid_time': 'Failed - Wrong Time',
+      'denied': 'Access Denied',
+      // Add more mappings as needed
+    };
+    return statusMap[event.status] || event.status;
+  }
+
+  async validateCredentials(controller) {
+    try {
+      const instance = axios.create({
+        baseURL: `http://${controller.ip_address}:${controller.port}`,
+        headers: this.createAuthHeader(controller.username, controller.password),
+        timeout: 5000
+      });
+
+      const response = await instance.get('/ISAPI/System/capabilities');
+      return response.status === 200;
+    } catch (error) {
+      console.error('Error validating credentials:', error);
+      return false;
     }
   }
 }
