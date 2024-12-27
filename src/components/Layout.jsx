@@ -29,13 +29,13 @@ const navigation = [
     icon: Clock
   },
   {
-    name: 'Users',
-    href: '/users',
-    icon: Users
+    name: 'Reports',
+    href: '/reports',
+    icon: FileText
   },
   {
-    name: 'Settings',
-    href: '/settings',
+    name: 'Controller Config',
+    href: '/controller-config',
     icon: Settings
   }
 ];
