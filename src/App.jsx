@@ -5,11 +5,11 @@ import Layout from '@/components/Layout';
 // Pages
 import ControllersManagement from '@/pages/access-control/controllers/ControllersManagement';
 import AttendanceView from '@/pages/access-control/attendance/AttendanceView';
+import AttendanceReports from '@/pages/access-control/reports/AttendanceReports';
+import ControllerConfig from '@/pages/access-control/controllers/ControllerConfig';
 
 // Placeholder components for other routes
 const Dashboard = () => <div className="p-6">Dashboard Coming Soon</div>;
-const Users = () => <div className="p-6">Users Management Coming Soon</div>;
-const Settings = () => <div className="p-6">Settings Coming Soon</div>;
 
 function App() {
   return (
@@ -19,8 +19,8 @@ function App() {
           <Route path="/" element={<Dashboard />} />
           <Route path="/controllers" element={<ControllersManagement />} />
           <Route path="/attendance" element={<AttendanceView />} />
-          <Route path="/users" element={<Users />} />
-          <Route path="/settings" element={<Settings />} />
+          <Route path="/reports" element={<AttendanceReports />} />
+          <Route path="/controller-config" element={<ControllerConfig />} />
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
       </Layout>
