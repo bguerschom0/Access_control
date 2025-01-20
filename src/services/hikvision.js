@@ -5,21 +5,18 @@ class HikvisionService {
     this.controllers = new Map();
   }
 
-  createAuthHeader(username, password) {
-    return {
-      Authorization: `Basic ${btoa(`${username}:${password}`)}`
-    };
-  }
-
   async initializeController(controller) {
     try {
-      // We'll use our backend API instead of connecting directly
+      console.log('Initializing controller:', controller);
+      
       const response = await axios.post('/api/hikvision/initialize', {
         ip_address: controller.ip_address,
         port: controller.port || 80,
         username: controller.username,
         password: controller.password
       });
+
+      console.log('Initialize response:', response.data);
 
       if (response.data.success) {
         this.controllers.set(controller.id, {
@@ -32,6 +29,9 @@ class HikvisionService {
       return false;
     } catch (error) {
       console.error('Failed to initialize controller:', error);
+      if (error.response) {
+        console.error('Error response:', error.response.data);
+      }
       return false;
     }
   }
@@ -50,14 +50,10 @@ class HikvisionService {
         }
       });
 
-      if (response.data.success) {
-        return {
-          isOnline: true,
-          ...response.data.status
-        };
-      }
-
-      return {
+      return response.data.success ? {
+        isOnline: true,
+        ...response.data.status
+      } : {
         isOnline: false,
         error: response.data.message
       };
