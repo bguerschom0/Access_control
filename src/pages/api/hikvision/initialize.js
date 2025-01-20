@@ -1,52 +1,41 @@
 import axios from 'axios';
-
-export const config = {
-  api: {
-    bodyParser: true,
-  },
-};
+import { HIKVISION_CONFIG } from '../../../config/hikvision';
 
 export default async function handler(req, res) {
-  // Log the request method and body for debugging
-  console.log('Request method:', req.method);
-  console.log('Request body:', req.body);
-
   if (req.method !== 'POST') {
-    return res.status(405).json({ 
-      success: false, 
-      message: 'Method not allowed. Only POST requests are accepted.' 
-    });
+    return res.status(405).json({ success: false, message: 'Method not allowed' });
   }
 
   try {
-    const { ip_address, port, username, password } = req.body;
+    const { DeviceInfo } = req.body;
 
     // Create instance for the controller
     const instance = axios.create({
-      baseURL: `http://${ip_address}:${port}`,
+      baseURL: `http://${DeviceInfo.ipAddress}:${DeviceInfo.port}`,
       headers: {
-        Authorization: `Basic ${Buffer.from(`${username}:${password}`).toString('base64')}`,
+        Authorization: `Basic ${Buffer.from(`${DeviceInfo.username}:${DeviceInfo.password}`).toString('base64')}`,
         'Content-Type': 'application/json'
       },
       timeout: 5000
     });
 
-    // Test connection
-    console.log('Testing connection to:', `http://${ip_address}:${port}/ISAPI/System/status`);
-    const response = await instance.get('/ISAPI/System/status');
+    // Get device status using proper endpoint
+    const statusResponse = await instance.get(HIKVISION_CONFIG.API_ENDPOINTS.DEVICE_STATUS);
+    
+    // Get device info
+    const deviceResponse = await instance.get(HIKVISION_CONFIG.API_ENDPOINTS.GET_DEVICES);
 
-    console.log('Connection successful:', response.data);
     return res.status(200).json({
       success: true,
-      status: response.data
+      deviceInfo: deviceResponse.data,
+      status: statusResponse.data
     });
 
   } catch (error) {
     console.error('Controller initialization error:', error);
     return res.status(500).json({
       success: false,
-      message: error.message || 'Failed to initialize controller',
-      details: error.response?.data || error.code
+      message: error.message
     });
   }
 }
