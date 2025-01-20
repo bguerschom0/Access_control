@@ -1,9 +1,4 @@
-import axios from 'axios';
-import https from 'https';
-
-const agent = new https.Agent({
-  rejectUnauthorized: false
-});
+import { createHikvisionClient, handleHikvisionError } from '../utils/hikvision';
 
 export default async function handler(req, res) {
   if (req.method !== 'POST') {
@@ -11,22 +6,15 @@ export default async function handler(req, res) {
   }
 
   try {
-    const { ip_address, port, username, password } = req.body;
-
-    const instance = axios.create({
-      baseURL: `https://${ip_address}:${port}`,
-      headers: {
-        Authorization: `Basic ${Buffer.from(`${username}:${password}`).toString('base64')}`
-      },
-      httpsAgent: agent,
-      timeout: 5000
-    });
-
-    await instance.get('/ISAPI/System/status');
+    const controllerData = req.body;
+    const hikvisionClient = createHikvisionClient(controllerData);
+    
+    // Try to get device status
+    await hikvisionClient.get('/ISAPI/System/status');
 
     return res.status(200).json({ success: true });
   } catch (error) {
-    console.error('Validation error:', error);
+    // Don't expose detailed error for validation
     return res.status(200).json({ success: false });
   }
 }
