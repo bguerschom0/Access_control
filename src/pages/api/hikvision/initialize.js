@@ -1,9 +1,4 @@
-import axios from 'axios';
-import https from 'https';
-
-const agent = new https.Agent({
-  rejectUnauthorized: false // Allow self-signed certificates
-});
+import { createHikvisionClient, handleHikvisionError } from '../utils/hikvision';
 
 export default async function handler(req, res) {
   if (req.method !== 'POST') {
@@ -11,36 +6,30 @@ export default async function handler(req, res) {
   }
 
   try {
-    const { ip_address, port, username, password } = req.body;
+    const controllerData = req.body;
+    const hikvisionClient = createHikvisionClient(controllerData);
 
-    // Create instance for the controller
-    const instance = axios.create({
-      baseURL: `https://${ip_address}:${port}`,
-      headers: {
-        Authorization: `Basic ${Buffer.from(`${username}:${password}`).toString('base64')}`,
-        'Content-Type': 'application/json'
-      },
-      httpsAgent: agent,
-      timeout: 5000
-    });
-
-    // Test connection
-    const response = await instance.get('/ISAPI/System/status');
+    // Test basic connectivity
+    const statusResponse = await hikvisionClient.get('/ISAPI/System/status');
+    
+    // Get device capabilities
+    const capabilitiesResponse = await hikvisionClient.get('/ISAPI/System/capabilities');
+    
+    // Get device info
+    const deviceInfoResponse = await hikvisionClient.get('/ISAPI/System/deviceInfo');
 
     return res.status(200).json({
       success: true,
       controller: {
-        ip_address,
-        port,
+        ...controllerData,
         status: 'online',
-        capabilities: response.data
+        deviceInfo: deviceInfoResponse.data,
+        capabilities: capabilitiesResponse.data,
+        systemStatus: statusResponse.data
       }
     });
   } catch (error) {
     console.error('Controller initialization error:', error);
-    return res.status(500).json({
-      success: false,
-      message: error.message
-    });
+    return res.status(500).json(handleHikvisionError(error));
   }
 }
