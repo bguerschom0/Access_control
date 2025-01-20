@@ -1,19 +1,15 @@
 export const HIKVISION_CONFIG = {
-  DEFAULT_PORTS: {
-    HTTP: 80,
-    HTTPS: 443,
-    RTSP: 554
+  API_ENDPOINTS: {
+    // Core endpoints as per documentation
+    GET_DEVICES: "ISAPI/Bumblebee/DeviceResource/V1/LogicalResource/Elements",
+    DEVICE_STATUS: "ISAPI/Bumblebee/DeviceResource/V1/PhysicalResource/OverView",
+    DOOR_CONTROL: "ISAPI/Bumblebee/ACSPlugin/V1/AccessControl/Door/Status"
   },
-  AUTH_TYPES: {
-    BASIC: 'basic',
-    DIGEST: 'digest'
-  },
-  ENDPOINTS: {
-    STATUS: '/ISAPI/System/status',
-    CAPABILITIES: '/ISAPI/System/capabilities',
-    DEVICE_INFO: '/ISAPI/System/deviceInfo',
-    SECURITY: '/ISAPI/Security/deviceCertificate',
-    IP_FILTER: '/ISAPI/System/Network/ipFilter'
-  },
-  // Add more configuration as needed
+  DEVICE_TYPES: {
+    DOOR: 1002,
+    FLOOR: 1011,
+    ELEVATOR: 1012,
+    CARD_READER: 1013,
+    INFO_SCREEN: 1026
+  }
 };
